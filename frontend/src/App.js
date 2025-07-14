@@ -11,11 +11,21 @@ function App() {
   const [activeTab, setActiveTab] = useState('listar');
 
   const fetchSchedules = async () => {
-    const token = localStorage.getItem('token');
-    const res = await axios.get('http://localhost:3001/api/schedules', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    setSchedules(res.data);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('http://localhost:3001/api/schedules', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSchedules(res.data);
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        alert('Sessão expirada. Faça login novamente.');
+        localStorage.removeItem('token');
+        setLoggedIn(false);
+      } else {
+        console.error('Erro ao buscar agendamentos:', err);
+      }
+    }
   };
 
   const handleLogin = async (username, password) => {
@@ -38,12 +48,28 @@ function App() {
   };
 
   const handleDelete = async (id) => {
-    const token = localStorage.getItem('token');
-    await axios.delete(`http://localhost:3001/api/schedules/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    fetchSchedules();
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:3001/api/schedules/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchSchedules();
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        alert('Sessão expirada. Faça login novamente.');
+        localStorage.removeItem('token');
+        setLoggedIn(false);
+      } else {
+        console.error('Erro ao excluir:', err);
+      }
+    }
   };
+
+  useEffect(() => {
+    if (loggedIn) {
+      fetchSchedules();
+    }
+  }, [loggedIn]);
 
   if (!loggedIn) {
     return <Login onLogin={handleLogin} />;
@@ -53,9 +79,14 @@ function App() {
     <div className="container">
       <h1>TI Alerts - Google Chat</h1>
       <button onClick={handleLogout} style={{ float: 'right' }}>Sair</button>
+
       <div className="tabs">
-        <button onClick={() => setActiveTab('criar')} className={activeTab === 'criar' ? 'active' : ''}>Novo Agendamento</button>
-        <button onClick={() => setActiveTab('listar')} className={activeTab === 'listar' ? 'active' : ''}>Agendamentos Criados</button>
+        <button onClick={() => setActiveTab('criar')} className={activeTab === 'criar' ? 'active' : ''}>
+          Novo Agendamento
+        </button>
+        <button onClick={() => setActiveTab('listar')} className={activeTab === 'listar' ? 'active' : ''}>
+          Agendamentos Criados
+        </button>
       </div>
 
       {activeTab === 'criar' && <ScheduleForm onSuccess={fetchSchedules} />}
