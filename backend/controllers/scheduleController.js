@@ -7,6 +7,49 @@ require('dotenv').config();
 
 const jobs = [];
 
+const { google } = require('googleapis');
+const KEY_PATH = path.join(__dirname, '../client_secret_18934537880-6tvg9m648movbvq76c4cjmso0n8kil1s.apps.googleusercontent.com.json');
+const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
+
+const auth = new google.auth.GoogleAuth({
+  keyFile: KEY_PATH,
+  scopes: SCOPES,
+});
+
+async function uploadToDrive(filePath, fileName, mimeType) {
+  console.log(`Imagem enviada para o Google Drive: ${fileName}`);
+  const authClient = await auth.getClient();
+  const drive = google.drive({ version: 'v3', auth: authClient });
+
+  const fileMetadata = {
+    name: fileName,
+    parents: [process.env.GOOGLE_DRIVE_FOLDER_ID]
+  };
+
+  const media = {
+    mimeType: mimeType,
+    body: fs.createReadStream(filePath)
+  };
+
+  const response = await drive.files.create({
+    resource: fileMetadata,
+    media,
+    fields: 'id'
+  });
+
+  const fileId = response.data.id;
+
+  await drive.permissions.create({
+    fileId,
+    requestBody: {
+      role: 'reader',
+      type: 'anyone'
+    }
+  });
+
+  return `https://drive.google.com/uc?export=view&id=${fileId}`;
+}
+
 function initializeScheduler() {
   db.query('SELECT * FROM agendamentos WHERE ativo = 1', (err, results) => {
     if (err) return console.error(err);
@@ -37,10 +80,9 @@ function scheduleJob(agendamento) {
       return;
   }
 
+  const imageUrl = agendamento.caminho_imagem || null;
+
   const job = cron.schedule(cronExp, () => {
-    const imageUrl = agendamento.caminho_imagem
-      ? `${process.env.SERVER_URL || 'http://localhost:3001'}/uploads/${agendamento.caminho_imagem}`
-      : null;
     postToGoogleChat(agendamento.texto, imageUrl);
   });
 
@@ -88,35 +130,48 @@ async function postToGoogleChat(texto, imagemUrl) {
 
 exports.initializeScheduler = initializeScheduler;
 
-exports.createSchedule = (req, res) => {
+exports.createSchedule = async (req, res) => {
   const { texto, tipo, hora, dias_semana, intervalo } = req.body;
-  const imagem = req.file ? req.file.filename : null;
+  let imageUrl = null;
 
-  const query = `INSERT INTO agendamentos 
-    (texto, caminho_imagem, tipo_periodicidade, hora_execucao, dias_semana, intervalo_horas, ativo) 
-    VALUES (?, ?, ?, ?, ?, ?, 1)`;
+  try {
+    if (req.file) {
+      const localPath = req.file.path;
+      const driveUrl = await uploadToDrive(localPath, req.file.originalname, req.file.mimetype);
+      imageUrl = driveUrl;
 
-  db.query(query, [texto, imagem, tipo, hora, dias_semana, intervalo], (err, result) => {
-    if (err) {
-      console.error('Erro ao inserir agendamento:', err);
-      return res.status(500).json({ message: 'Erro ao criar agendamento', error: err });
+      // opcional: deletar arquivo local após upload
+      fs.unlinkSync(localPath);
     }
 
-    // Inicia o job imediatamente após criar
-    const novoAgendamento = {
-      id: result.insertId,
-      texto,
-      caminho_imagem: imagem,
-      tipo_periodicidade: tipo,
-      hora_execucao: hora,
-      dias_semana,
-      intervalo_horas: intervalo
-    };
+    const query = `INSERT INTO agendamentos 
+      (texto, caminho_imagem, tipo_periodicidade, hora_execucao, dias_semana, intervalo_horas, ativo) 
+      VALUES (?, ?, ?, ?, ?, ?, 1)`;
 
-    scheduleJob(novoAgendamento);
+    db.query(query, [texto, imageUrl, tipo, hora, dias_semana, intervalo], (err, result) => {
+      if (err) {
+        console.error('Erro ao inserir agendamento:', err);
+        return res.status(500).json({ message: 'Erro ao criar agendamento', error: err });
+      }
 
-    res.status(201).json({ message: 'Agendamento criado com sucesso' });
-  });
+      const novoAgendamento = {
+        id: result.insertId,
+        texto,
+        caminho_imagem: imageUrl,
+        tipo_periodicidade: tipo,
+        hora_execucao: hora,
+        dias_semana,
+        intervalo_horas: intervalo
+      };
+
+      scheduleJob(novoAgendamento);
+
+      return res.status(201).json({ message: 'Agendamento criado com sucesso' });
+    });
+  } catch (error) {
+    console.error('Erro ao criar agendamento com imagem:', error);
+    return res.status(500).json({ message: 'Erro no upload para o Google Drive', error });
+  }
 };
 
 exports.getAll = (req, res) => {
@@ -126,23 +181,34 @@ exports.getAll = (req, res) => {
   });
 };
 
-exports.updateSchedule = (req, res) => {
+exports.updateSchedule = async (req, res) => {
   const { id } = req.params;
   const { texto, tipo, hora, dias_semana, intervalo } = req.body;
-  const imagem = req.file ? req.file.filename : null;
 
-  const query = `UPDATE agendamentos 
-    SET texto=?, tipo_periodicidade=?, hora_execucao=?, dias_semana=?, intervalo_horas=?${imagem ? ', caminho_imagem=?' : ''} 
-    WHERE id=?`;
+  let imageUrl = null;
+  try {
+    if (req.file) {
+      const localPath = req.file.path;
+      imageUrl = await uploadToDrive(localPath, req.file.originalname, req.file.mimetype);
+      fs.unlinkSync(localPath);
+    }
 
-  const params = imagem
-    ? [texto, tipo, hora, dias_semana, intervalo, imagem, id]
-    : [texto, tipo, hora, dias_semana, intervalo, id];
+    const query = `UPDATE agendamentos 
+      SET texto=?, tipo_periodicidade=?, hora_execucao=?, dias_semana=?, intervalo_horas=?${imageUrl ? ', caminho_imagem=?' : ''} 
+      WHERE id=?`;
 
-  db.query(query, params, (err) => {
-    if (err) return res.status(500).json({ message: 'Erro ao atualizar agendamento', error: err });
-    res.status(200).json({ message: 'Atualizado com sucesso' });
-  });
+    const params = imageUrl
+      ? [texto, tipo, hora, dias_semana, intervalo, imageUrl, id]
+      : [texto, tipo, hora, dias_semana, intervalo, id];
+
+    db.query(query, params, (err) => {
+      if (err) return res.status(500).json({ message: 'Erro ao atualizar agendamento', error: err });
+      res.status(200).json({ message: 'Atualizado com sucesso' });
+    });
+  } catch (err) {
+    console.error('Erro ao atualizar com imagem:', err);
+    return res.status(500).json({ message: 'Erro ao atualizar agendamento com imagem', error: err });
+  }
 };
 
 exports.deleteSchedule = (req, res) => {
