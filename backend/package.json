@@ -7,9 +7,9 @@
     "start": "node server.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Fabio Mello",
   "license": "ISC",
-  "description": "",
+  "description": "API de alertas",
   "dependencies": {
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",

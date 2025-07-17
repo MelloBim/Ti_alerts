@@ -1,4 +1,4 @@
-const db = require('../db');
+const { connection } = require('../db');
 const path = require('path');
 const fs = require('fs');
 const cron = require('node-cron');
@@ -51,7 +51,7 @@ async function uploadToDrive(filePath, fileName, mimeType) {
 }
 
 function initializeScheduler() {
-  db.query('SELECT * FROM agendamentos WHERE ativo = 1', (err, results) => {
+  connection.query('SELECT * FROM agendamentos WHERE ativo = 1', (err, results) => {
     if (err) return console.error(err);
     console.log("Agendamentos encontrados:", results);
     results.forEach(schedule => scheduleJob(schedule));
@@ -148,7 +148,7 @@ exports.createSchedule = async (req, res) => {
       (texto, caminho_imagem, tipo_periodicidade, hora_execucao, dias_semana, intervalo_horas, ativo) 
       VALUES (?, ?, ?, ?, ?, ?, 1)`;
 
-    db.query(query, [texto, imageUrl, tipo, hora, dias_semana, intervalo], (err, result) => {
+    connection.query(query, [texto, imageUrl, tipo, hora, dias_semana, intervalo], (err, result) => {
       if (err) {
         console.error('Erro ao inserir agendamento:', err);
         return res.status(500).json({ message: 'Erro ao criar agendamento', error: err });
@@ -175,7 +175,7 @@ exports.createSchedule = async (req, res) => {
 };
 
 exports.getAll = (req, res) => {
-  db.query('SELECT * FROM agendamentos', (err, results) => {
+  connection.query('SELECT * FROM agendamentos', (err, results) => {
     if (err) return res.status(500).json({ message: 'Erro ao buscar agendamentos', error: err });
     res.status(200).json(results);
   });
@@ -201,7 +201,7 @@ exports.updateSchedule = async (req, res) => {
       ? [texto, tipo, hora, dias_semana, intervalo, imageUrl, id]
       : [texto, tipo, hora, dias_semana, intervalo, id];
 
-    db.query(query, params, (err) => {
+    connection.query(query, params, (err) => {
       if (err) return res.status(500).json({ message: 'Erro ao atualizar agendamento', error: err });
       res.status(200).json({ message: 'Atualizado com sucesso' });
     });
@@ -212,7 +212,7 @@ exports.updateSchedule = async (req, res) => {
 };
 
 exports.deleteSchedule = (req, res) => {
-  db.query('DELETE FROM agendamentos WHERE id=?', [req.params.id], (err) => {
+  connection.query('DELETE FROM agendamentos WHERE id=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ message: 'Erro ao deletar agendamento', error: err });
     res.status(200).json({ message: 'Deletado com sucesso' });
   });
