@@ -8,7 +8,7 @@ require('dotenv').config();
 const jobs = [];
 
 const { google } = require('googleapis');
-const KEY_PATH = path.join(__dirname, '../client_secret_18934537880-6tvg9m648movbvq76c4cjmso0n8kil1s.apps.googleusercontent.com.json');
+const KEY_PATH = path.join(__dirname, '../drive-service-account.json');
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
 const auth = new google.auth.GoogleAuth({
@@ -34,7 +34,8 @@ async function uploadToDrive(filePath, fileName, mimeType) {
   const response = await drive.files.create({
     resource: fileMetadata,
     media,
-    fields: 'id'
+    fields: 'id',
+    supportsAllDrives: true
   });
 
   const fileId = response.data.id;
@@ -42,8 +43,9 @@ async function uploadToDrive(filePath, fileName, mimeType) {
   await drive.permissions.create({
     fileId,
     requestBody: {
-      role: 'reader',
-      type: 'anyone'
+      role: 'writer',
+      type: 'user',
+      emailAddress: 'fabiomellolacerda@gmail.com' 
     }
   });
 
@@ -59,6 +61,11 @@ function initializeScheduler() {
 }
 
 function scheduleJob(agendamento) {
+  if (!agendamento.hora_execucao) {
+    console.error(`Agendamento ID ${agendamento.id} sem hora_execucao. Ignorando.`);
+    return;
+  }
+
   console.log(`Agendando: ${agendamento.texto} às ${agendamento.hora_execucao}`);
   let cronExp;
   const hora = agendamento.hora_execucao.split(':');

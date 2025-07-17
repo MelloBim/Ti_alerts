@@ -1,0 +1,34 @@
+# .gitignore
+client_secret_*.json
+# Segurança
+drive-service-account.json
+# Ignorar dependências
+node_modules/
+
+# Ignorar arquivos de ambiente e configuração sensível
+.env
+*.env.*
+
+# Ignorar chaves privadas e credenciais
+drive-service-account.json
+*.key
+*.pem
+*.p12
+*.crt
+
+# Ignorar arquivos de uploads locais
+uploads/
+
+# Ignorar logs e arquivos temporários
+*.log
+logs/
+*.tmp
+*.swp
+
+# Ignorar arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Cache de editor (VSCode, JetBrains, etc.)
+.vscode/
+.idea/
