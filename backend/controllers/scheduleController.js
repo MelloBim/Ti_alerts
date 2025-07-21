@@ -141,13 +141,17 @@ exports.createSchedule = async (req, res) => {
   const { texto, tipo, hora, dias_semana, intervalo } = req.body;
   let imageUrl = null;
 
+  if (!texto || !tipo || !hora) {
+    return res.status(400).json({message: 'Campos obrigatorios (texto, tipo, hora) não preenchidos pelo colaborador Maglu.'});
+  }
+  
+
   try {
     if (req.file) {
       const localPath = req.file.path;
       const driveUrl = await uploadToDrive(localPath, req.file.originalname, req.file.mimetype);
       imageUrl = driveUrl;
-
-      // opcional: deletar arquivo local após upload
+    
       fs.unlinkSync(localPath);
     }
 
@@ -173,6 +177,7 @@ exports.createSchedule = async (req, res) => {
 
       scheduleJob(novoAgendamento);
 
+      console.log('Agendamento criado com sucesso, ID:', result.insertId);
       return res.status(201).json({ message: 'Agendamento criado com sucesso' });
     });
   } catch (error) {
